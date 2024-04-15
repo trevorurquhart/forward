@@ -1,0 +1,9 @@
+<component name="libraryTable">
+  <library name="Forward">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/Forward.zip!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>
