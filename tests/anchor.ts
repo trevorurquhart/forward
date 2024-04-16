@@ -1,4 +1,5 @@
 import * as anchor from "@coral-xyz/anchor";
+import {AnchorError} from "@coral-xyz/anchor";
 import * as web3 from "@solana/web3.js";
 import {expect} from "chai";
 // import {
@@ -8,20 +9,25 @@ import {expect} from "chai";
 //   TOKEN_PROGRAM_ID,
 // } from "@solana/spl-token";
 import type {Forward} from "../target/types/forward";
+import {deposit} from "./fn";
 
 describe("Test forward", () => {
+
+    const forwardId = 104;
+    let destinationKp;
+    let quarantineKp;
+    let forward;
+
     // Configure the client to use the local cluster
     anchor.setProvider(anchor.AnchorProvider.env());
-
     const program = anchor.workspace.Forward as anchor.Program<Forward>;
 
-    it("test forwarding SOL", async () => {
+    beforeEach(async () => {
 
-        const forwardId = 104;
-        const destinationKp = new web3.Keypair();
-        const quarantineKp = new web3.Keypair();
+        destinationKp = new web3.Keypair();
+        quarantineKp = new web3.Keypair();
 
-        const [forward] = web3.PublicKey.findProgramAddressSync(
+        [forward] = web3.PublicKey.findProgramAddressSync(
             [Buffer.from("forward"), destinationKp.publicKey.toBuffer(), new anchor.BN(forwardId).toArrayLike(Buffer, "le", 8)],
             program.programId
         );
@@ -36,29 +42,14 @@ describe("Test forward", () => {
             .signers([program.provider.wallet.payer])
             .rpc();
 
-        // console.log(`https://explorer.solana.com/tx/${txInitialiase}?cluster=devnet`);
+        console.log(`Waiting for ${txInitialise} to finalise, forward :${forward}, destination: ${destinationKp.publicKey}`);
         await program.provider.connection.confirmTransaction(txInitialise, "finalized");
 
-        //Deposit to the forward
-        let depositAmount = web3.LAMPORTS_PER_SOL / 100;
-        let blockhash = await program.provider.connection.getLatestBlockhash().then(res => res.blockhash);
-        const instructions = [web3.SystemProgram.transfer({
-            fromPubkey: program.provider.publicKey,
-            toPubkey: forward,
-            lamports: depositAmount
-        })];
+    });
 
-        const messageV0 = new web3.TransactionMessage({
-            payerKey: program.provider.publicKey,
-            recentBlockhash: blockhash,
-            instructions
-        }).compileToV0Message();
-        const transaction = new web3.VersionedTransaction(messageV0);
-        transaction.sign([program.provider.wallet.payer]);
-        const txDeposit = await program.provider.connection.sendTransaction(transaction);
+    it("test forwarding SOL", async () => {
 
-        // console.log(`https://explorer.solana.com/tx/${txDeposit}?cluster=devnet`);
-        await program.provider.connection.confirmTransaction(txDeposit, "finalized");
+        await deposit(program.provider, forward, web3.LAMPORTS_PER_SOL / 100);
 
         //Execute forward
         const txExecute = await program.methods
@@ -74,8 +65,29 @@ describe("Test forward", () => {
         await program.provider.connection.confirmTransaction(txExecute, "finalized");
 
         const balance = await program.provider.connection.getBalance(destinationKp.publicKey);
-        expect(balance).to.equal(depositAmount);
-
+        expect(balance).to.equal(web3.LAMPORTS_PER_SOL / 100);
     });
+
+    it("should not be able to forward to another address", async () => {
+
+        try {
+            const incorrectDestinationKp = new web3.Keypair();
+            console.log(`executing forward ${forward} to ${incorrectDestinationKp.publicKey}`)
+            await program.methods
+                .forwardSol()
+                .accounts({
+                    forward: forward,
+                    destination: incorrectDestinationKp.publicKey
+                })
+                .signers([program.provider.wallet.payer])
+                .rpc();
+        } catch (e) {
+            expect(e).to.be.an.instanceof(AnchorError)
+            const err: AnchorError = e;
+            expect(err.error.errorMessage).to.equal("A seeds constraint was violated");
+            expect(err.error.errorCode.number).to.equal(2006);
+        }
+    });
+
 
 });

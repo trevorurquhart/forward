@@ -26,11 +26,6 @@ mod forward {
         let forward = &mut ctx.accounts.forward;
         let destination = &mut ctx.accounts.destination;
 
-        // test but should be done in constraint now.
-        // if *destination.key != forward.destination {
-        //     return Err(ForwardError::InvalidDestination.into());
-        // }
-
         let rent_balance = Rent::get()?.minimum_balance(forward.to_account_info().data_len());
         let amount = forward.to_account_info().get_lamports() - rent_balance;
         if amount <= 0 {
@@ -99,7 +94,6 @@ pub struct Initialize<'info> {
 
 #[derive(Accounts)]
 pub struct ForwardSol<'info> {
-    //, forward.id.to_le_bytes().as_ref()
     #[account(
         mut,
         seeds = [FORWARD_SEED.as_ref(), destination.key().as_ref(), forward.id.to_le_bytes().as_ref()],
@@ -107,8 +101,11 @@ pub struct ForwardSol<'info> {
     )]
     pub forward: Account<'info, Forward>,
 
-    /// CHECK: todo - safe?
-    #[account(mut, constraint = destination.key() == forward.destination @ ForwardError::InvalidDestination)]
+    /// CHECK: todo - safe, constraint here is redundant if the seed requires the destination?
+    #[account(
+        mut,
+        // constraint = destination.key() == forward.destination @ ForwardError::InvalidDestination
+    )]
     pub destination: UncheckedAccount<'info>,
 }
 
