@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*;
 // use crate::program::Forward;
+use anchor_spl::token::{self, Token, TokenAccount, Transfer as SplTransfer};
 
 // This is your program's public key and it will update
 // automatically when you build the project.
@@ -36,13 +37,13 @@ mod forward {
         Ok(())
     }
 
-    // pub fn execute_token(ctx: Context<ExecuteToken>) -> Result<()> 
+    // pub fn forward_token(ctx: Context<ExecuteToken>) -> Result<()>
     // {
     //     let destination = &ctx.accounts.to_ata;
     //     let source = &ctx.accounts.from_ata;
     //     let token_program = &ctx.accounts.token_program;
     //     let authority = &ctx.accounts.from;
-
+    //
     //     // Transfer tokens from taker to initializer
     //     let cpi_accounts = SplTransfer {
     //         from: source.to_account_info().clone(),
@@ -50,7 +51,7 @@ mod forward {
     //         authority: authority.to_account_info().clone(),
     //     };
     //     let cpi_program = token_program.to_account_info();
-
+    //
     //     token::transfer(
     //         CpiContext::new(cpi_program, cpi_accounts),
     //         amount)?;
@@ -104,7 +105,7 @@ pub struct ForwardSol<'info> {
     /// CHECK: todo - safe, constraint here is redundant if the seed requires the destination?
     #[account(
         mut,
-        // constraint = destination.key() == forward.destination @ ForwardError::InvalidDestination
+        // address = forward.destination @ ForwardError::InvalidDestination
     )]
     pub destination: UncheckedAccount<'info>,
 }
@@ -115,4 +116,43 @@ pub enum ForwardError {
     InsufficientFunds,
     #[msg("Invalid destination")]
     InvalidDestination,
+}
+
+#[derive(Accounts)]
+// #[instruction(mint: u64)]
+pub struct ForwardToken<'info> {
+
+    #[account(mut)]
+    pub user: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [FORWARD_SEED.as_ref(), destination.key().as_ref(), forward.id.to_le_bytes().as_ref()],
+        bump = forward.bump
+    )]
+    pub forward: Account<'info, Forward>,
+
+    #[account(
+        mut,
+    // address = forward.destination @ ForwardError::InvalidDestination
+    )]
+    pub destination: UncheckedAccount<'info>,
+
+
+    #[account(
+        token::mint = mint,
+        token::authority = forward,
+    )]
+    pub forward_ata: Account<'info, TokenAccount>,
+
+    #[account(
+        init,
+        payer = user,
+        token::mint = mint,
+        token::authority = destination,
+    )]
+    pub destination_ata: Account<'info, TokenAccount>,
+
+    pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>
 }
