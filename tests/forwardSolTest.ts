@@ -1,7 +1,7 @@
 import * as anchor from "@coral-xyz/anchor";
-import {AnchorError} from "@coral-xyz/anchor";
+import {AnchorError, BN} from "@coral-xyz/anchor";
 import * as web3 from "@solana/web3.js";
-import {expect} from "chai";
+import {assert, expect} from "chai";
 // import {
 //   createMint,
 //   createAssociatedTokenAccount,
@@ -10,6 +10,7 @@ import {expect} from "chai";
 // } from "@solana/spl-token";
 import type {Forward} from "../target/types/forward";
 import {deposit} from "./fn";
+import {createAssociatedTokenAccount, createMint, mintTo, TOKEN_PROGRAM_ID} from "@solana/spl-token";
 
 describe("Test forward", () => {
 
@@ -42,8 +43,9 @@ describe("Test forward", () => {
             .signers([program.provider.wallet.payer])
             .rpc();
 
-        console.log(`Waiting for ${txInitialise} to finalise, forward :${forward}, destination: ${destinationKp.publicKey}`);
+        console.log(`Waiting for ${txInitialise} to finalise`);
         await program.provider.connection.confirmTransaction(txInitialise, "finalized");
+        console.log(`Done`);
 
     });
 
@@ -89,5 +91,65 @@ describe("Test forward", () => {
         }
     });
 
+    it("transferSplTokens", async () => {
+        // Generate keypairs for the new accounts
+        const fromKp = program.wallet.keypair;
+        const toKp = new web3.Keypair();
+
+        // Create a new mint and initialize it
+        const mintKp = new web3.Keypair();
+        const mint = await createMint(
+            program.provider.connection,
+            program.provider.wallet.keypair,
+            fromKp.publicKey,
+            null,
+            0
+        );
+
+        // Create associated token accounts for the new accounts
+        const fromAta = await createAssociatedTokenAccount(
+            program.provider.connection,
+            program.provider.wallet.keypair,
+            mint,
+            fromKp.publicKey
+        );
+        const toAta = await createAssociatedTokenAccount(
+            program.provider.connection,
+            program.provider.wallet.keypair,
+            mint,
+            toKp.publicKey
+        );
+        // Mint tokens to the 'from' associated token account
+        const mintAmount = 1000;
+        await mintTo(
+            program.provider.connection,
+            program.provider.wallet.keypair,
+            mint,
+            fromAta,
+            program.provider.wallet.keypair.publicKey,
+            mintAmount
+        );
+
+        // Send transaction
+        const transferAmount = new BN(500);
+        const txHash = await program.methods
+            .transferSplTokens(transferAmount)
+            .accounts({
+                from: fromKp.publicKey,
+                fromAta: fromAta,
+                toAta: toAta,
+                tokenProgram: TOKEN_PROGRAM_ID,
+            })
+            .signers([pg.wallet.keypair, fromKp])
+            .rpc();
+        console.log(`https://explorer.solana.com/tx/${txHash}?cluster=devnet`);
+        await program.provider.connection.confirmTransaction(txHash, "finalized");
+        const toTokenAccount = await program.provider.connection.getTokenAccountBalance(toAta);
+        assert.strictEqual(
+            toTokenAccount.value.uiAmount,
+            transferAmount.toNumber(),
+            "The 'to' token account should have the transferred tokens"
+        );
+    });
 
 });

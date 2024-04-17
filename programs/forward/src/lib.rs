@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 // use crate::program::Forward;
-use anchor_spl::token::{self, Token, TokenAccount, Transfer as SplTransfer};
+use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer as SplTransfer};
 
 // This is your program's public key and it will update
 // automatically when you build the project.
@@ -37,26 +37,27 @@ mod forward {
         Ok(())
     }
 
-    // pub fn forward_token(ctx: Context<ExecuteToken>) -> Result<()>
-    // {
-    //     let destination = &ctx.accounts.to_ata;
-    //     let source = &ctx.accounts.from_ata;
-    //     let token_program = &ctx.accounts.token_program;
-    //     let authority = &ctx.accounts.from;
-    //
-    //     // Transfer tokens from taker to initializer
-    //     let cpi_accounts = SplTransfer {
-    //         from: source.to_account_info().clone(),
-    //         to: destination.to_account_info().clone(),
-    //         authority: authority.to_account_info().clone(),
-    //     };
-    //     let cpi_program = token_program.to_account_info();
-    //
-    //     token::transfer(
-    //         CpiContext::new(cpi_program, cpi_accounts),
-    //         amount)?;
-    //     Ok(())
-    // }
+    pub fn forward_token(ctx: Context<ForwardToken>) -> Result<()>
+    {
+        let destination = &ctx.accounts.destination_ata;
+        let source = &ctx.accounts.forward_ata;
+        let token_program = &ctx.accounts.token_program;
+        let authority = &ctx.accounts.user;
+        let amount: u64 = source.amount;
+
+        // Transfer tokens from taker to initializer
+        let cpi_accounts = SplTransfer {
+            from: source.to_account_info().clone(),
+            to: destination.to_account_info().clone(),
+            authority: authority.to_account_info().clone(),
+        };
+        let cpi_program = token_program.to_account_info();
+
+        token::transfer(
+            CpiContext::new(cpi_program, cpi_accounts),
+            amount)?;
+        Ok(())
+    }
 }
 
 #[account]
@@ -122,9 +123,6 @@ pub enum ForwardError {
 // #[instruction(mint: u64)]
 pub struct ForwardToken<'info> {
 
-    #[account(mut)]
-    pub user: Signer<'info>,
-
     #[account(
         mut,
         seeds = [FORWARD_SEED.as_ref(), destination.key().as_ref(), forward.id.to_le_bytes().as_ref()],
@@ -132,16 +130,15 @@ pub struct ForwardToken<'info> {
     )]
     pub forward: Account<'info, Forward>,
 
-    #[account(
-        mut,
-    // address = forward.destination @ ForwardError::InvalidDestination
-    )]
+    pub mint: Account<'info, Mint>,
+
+    /// CHECK: todo - safe, constraint here is redundant if the seed requires the destination?
+    #[account(mut)]
     pub destination: UncheckedAccount<'info>,
 
-
     #[account(
-        token::mint = mint,
-        token::authority = forward,
+        associated_token::mint = mint,
+        associated_token::authority = forward,
     )]
     pub forward_ata: Account<'info, TokenAccount>,
 
@@ -153,6 +150,8 @@ pub struct ForwardToken<'info> {
     )]
     pub destination_ata: Account<'info, TokenAccount>,
 
+    #[account(mut)]
+    pub user: Signer<'info>,
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>
 }
