@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 // use crate::program::Forward;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer as SplTransfer};
+// use anchor_spl::token_2022_extensions::spl_token_metadata_interface::solana_program::program_stubs::SyscallStubs;
 
 // This is your program's public key and it will update
 // automatically when you build the project.
@@ -89,8 +90,7 @@ pub struct Initialize<'info> {
     )]
     pub forward: Account<'info, Forward>,
 
-    /// CHECK: todo - safe?
-    pub destination: UncheckedAccount<'info>,
+    pub destination: SystemAccount<'info>,
     pub system_program: Program<'info, System>,
 }
 
@@ -103,12 +103,11 @@ pub struct ForwardSol<'info> {
     )]
     pub forward: Account<'info, Forward>,
 
-    /// CHECK: todo - safe, constraint here is redundant if the seed requires the destination?
     #[account(
         mut,
         // address = forward.destination @ ForwardError::InvalidDestination
     )]
-    pub destination: UncheckedAccount<'info>,
+    pub destination: SystemAccount<'info>,
 }
 
 #[error_code]
@@ -132,9 +131,8 @@ pub struct ForwardToken<'info> {
 
     pub mint: Account<'info, Mint>,
 
-    /// CHECK: todo - safe, constraint here is redundant if the seed requires the destination?
     #[account(mut)]
-    pub destination: UncheckedAccount<'info>,
+    pub destination: SystemAccount<'info>,
 
     #[account(
         associated_token::mint = mint,
