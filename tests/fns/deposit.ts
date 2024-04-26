@@ -1,6 +1,9 @@
 import * as web3 from "@solana/web3.js";
 
-export const deposit = async (provider, to, depositAmount) => {
+export async function deposit(
+    provider,
+    to,
+    depositAmount) {
 
     let blockhash = await provider.connection.getLatestBlockhash().then(res => res.blockhash);
     const instructions = [web3.SystemProgram.transfer({

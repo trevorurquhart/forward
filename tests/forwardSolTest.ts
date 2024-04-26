@@ -2,15 +2,10 @@ import * as anchor from "@coral-xyz/anchor";
 import {AnchorError, BN} from "@coral-xyz/anchor";
 import * as web3 from "@solana/web3.js";
 import {assert, expect} from "chai";
-// import {
-//   createMint,
-//   createAssociatedTokenAccount,
-//   mintTo,
-//   TOKEN_PROGRAM_ID,
-// } from "@solana/spl-token";
 import type {Forward} from "../target/types/forward";
-import {deposit} from "./fn";
-import {createAssociatedTokenAccount, createMint, mintTo, TOKEN_PROGRAM_ID} from "@solana/spl-token";
+import {ASSOCIATED_TOKEN_PROGRAM_ID, createMint, mintTo, TOKEN_PROGRAM_ID} from "@solana/spl-token";
+import {createAssociatedTokenAccountIdempotent} from "./fns/createToken";
+
 
 describe("Test forward", () => {
 
@@ -98,41 +93,55 @@ describe("Test forward", () => {
 
         // Create a new mint and initialize it
         const mintAuthority = new web3.Keypair();
+
         const mint = await createMint(
             connection,
-            wallet.keypair,
+            wallet.payer,
             mintAuthority.publicKey,
             null,
             0
         );
 
         // Create associated token accounts for the new accounts
-        const forwardAta = await createAssociatedTokenAccount(
+        const forwardAta = await createAssociatedTokenAccountIdempotent(
             connection,
             wallet.payer,
             mint,
-            forward
+            forward,
+            true
         );
 
-        const destinationAta = await createAssociatedTokenAccount(
+        const destinationAta = await createAssociatedTokenAccountIdempotent(
             connection,
             wallet.payer,
             mint,
             destinationKp.publicKey
         );
+
+        console.log("---------------------------------------------------------------------------------------")
+        console.log("forward ", forward)
+        console.log("mint ", mint)
+        console.log("destination ", destinationKp.publicKey)
+        console.log("forwardAta ", forwardAta)
+        console.log("destinationAta ", destinationAta)
+        console.log("user ", wallet.publicKey)
+        console.log("tokenProgram ", TOKEN_PROGRAM_ID)
+        console.log("associatedTokenProgram ", ASSOCIATED_TOKEN_PROGRAM_ID)
+        console.log("systemProgram ", anchor.web3.SystemProgram.programId)
+
         // Mint tokens to the forward
         const mintAmount = 1000;
         await mintTo(
             connection,
-            wallet.keypair,
+            wallet.payer,
             mint,
             forwardAta,
-            wallet.keypair.publicKey,
+            mintAuthority,
             mintAmount
         );
 
         // Send transaction
-        const transferAmount = new BN(500);
+        console.log("executing forward");
         const txHash = await program.methods
             .forwardToken()
             .accounts({
@@ -141,10 +150,16 @@ describe("Test forward", () => {
                 destination: destinationKp.publicKey,
                 forwardAta: forwardAta,
                 destinationAta: destinationAta,
+                user: wallet.publicKey,
                 tokenProgram: TOKEN_PROGRAM_ID,
+                associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+                systemProgram: anchor.web3.SystemProgram.programId,
             })
-            .signers([wallet.keypair])
+            .signers([wallet.payer])
             .rpc();
+        console.log("forward sent");
+
+
         console.log(`https://explorer.solana.com/tx/${txHash}?cluster=devnet`);
         await connection.confirmTransaction(txHash, "finalized");
         const toTokenAccount = await connection.getTokenAccountBalance(forwardAta);

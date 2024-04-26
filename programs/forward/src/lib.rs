@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use anchor_spl::associated_token::AssociatedToken;
 // use crate::program::Forward;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer as SplTransfer};
 // use anchor_spl::token_2022_extensions::spl_token_metadata_interface::solana_program::program_stubs::SyscallStubs;
@@ -40,23 +41,15 @@ mod forward {
 
     pub fn forward_token(ctx: Context<ForwardToken>) -> Result<()>
     {
-        let destination = &ctx.accounts.destination_ata;
-        let source = &ctx.accounts.forward_ata;
-        let token_program = &ctx.accounts.token_program;
-        let authority = &ctx.accounts.user;
-        let amount: u64 = source.amount;
-
-        // Transfer tokens from taker to initializer
-        let cpi_accounts = SplTransfer {
-            from: source.to_account_info().clone(),
-            to: destination.to_account_info().clone(),
-            authority: authority.to_account_info().clone(),
-        };
-        let cpi_program = token_program.to_account_info();
-
         token::transfer(
-            CpiContext::new(cpi_program, cpi_accounts),
-            amount)?;
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                SplTransfer {
+                    from: ctx.accounts.forward_ata.to_account_info(),
+                    to: ctx.accounts.destination_ata.to_account_info(),
+                    authority: ctx.accounts.forward.to_account_info(),
+                }),
+            ctx.accounts.forward_ata.amount)?;
         Ok(())
     }
 }
@@ -119,7 +112,6 @@ pub enum ForwardError {
 }
 
 #[derive(Accounts)]
-// #[instruction(mint: u64)]
 pub struct ForwardToken<'info> {
 
     #[account(
@@ -131,25 +123,26 @@ pub struct ForwardToken<'info> {
 
     pub mint: Account<'info, Mint>,
 
-    #[account(mut)]
+    #[account()]
     pub destination: SystemAccount<'info>,
 
     #[account(
+        mut,
         associated_token::mint = mint,
         associated_token::authority = forward,
     )]
     pub forward_ata: Account<'info, TokenAccount>,
 
     #[account(
-        init,
-        payer = user,
-        token::mint = mint,
-        token::authority = destination,
+        mut,
+        associated_token::mint = mint,
+        associated_token::authority = destination
     )]
     pub destination_ata: Account<'info, TokenAccount>,
 
     #[account(mut)]
     pub user: Signer<'info>,
     pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>
 }
