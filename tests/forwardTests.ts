@@ -5,6 +5,7 @@ import {assert, expect} from "chai";
 import type {Forward} from "../target/types/forward";
 import {ASSOCIATED_TOKEN_PROGRAM_ID, createMint, mintTo, TOKEN_PROGRAM_ID} from "@solana/spl-token";
 import {createAssociatedTokenAccountIdempotent} from "./fns/createToken";
+import {deposit} from "./fns/deposit";
 
 
 describe("Test forward", () => {
@@ -41,53 +42,53 @@ describe("Test forward", () => {
             .signers([wallet.payer])
             .rpc();
 
-        console.log(`Waiting for ${txInitialise} to finalise`);
+        console.log(`Waiting for forward creation to finalise`);
         await connection.confirmTransaction(txInitialise, "finalized");
         console.log(`Done`);
 
     });
 
-    // it("test forwarding SOL", async () => {
-    //
-    //     await deposit(provider, forward, web3.LAMPORTS_PER_SOL / 100);
-    //
-    //     //Execute forward
-    //     const txExecute = await program.methods
-    //         .forwardSol()
-    //         .accounts({
-    //             forward: forward,
-    //             destination: destinationKp.publicKey
-    //         })
-    //         .signers([wallet.payer])
-    //         .rpc();
-    //
-    //     // console.log(`https://explorer.solana.com/tx/${txExecute}?cluster=devnet`);
-    //     await connection.confirmTransaction(txExecute, "finalized");
-    //
-    //     const balance = await connection.getBalance(destinationKp.publicKey);
-    //     expect(balance).to.equal(web3.LAMPORTS_PER_SOL / 100);
-    // });
-    //
-    // it("should not be able to forward to another address", async () => {
-    //
-    //     try {
-    //         const incorrectDestinationKp = new web3.Keypair();
-    //         console.log(`executing forward ${forward} to ${incorrectDestinationKp.publicKey}`)
-    //         await program.methods
-    //             .forwardSol()
-    //             .accounts({
-    //                 forward: forward,
-    //                 destination: incorrectDestinationKp.publicKey
-    //             })
-    //             .signers([wallet.payer])
-    //             .rpc();
-    //     } catch (e) {
-    //         expect(e).to.be.an.instanceof(AnchorError)
-    //         const err: AnchorError = e;
-    //         expect(err.error.errorMessage).to.equal("A seeds constraint was violated");
-    //         expect(err.error.errorCode.number).to.equal(2006);
-    //     }
-    // });
+    it("test forwarding SOL", async () => {
+
+        await deposit(provider, forward, web3.LAMPORTS_PER_SOL / 100);
+
+        //Execute forward
+        const txExecute = await program.methods
+            .forwardSol()
+            .accounts({
+                forward: forward,
+                destination: destinationKp.publicKey
+            })
+            .signers([wallet.payer])
+            .rpc();
+
+        // console.log(`https://explorer.solana.com/tx/${txExecute}?cluster=devnet`);
+        await connection.confirmTransaction(txExecute, "finalized");
+
+        const balance = await connection.getBalance(destinationKp.publicKey);
+        expect(balance).to.equal(web3.LAMPORTS_PER_SOL / 100);
+    });
+
+    it("should not be able to forward to another address", async () => {
+
+        try {
+            const incorrectDestinationKp = new web3.Keypair();
+            console.log(`executing forward ${forward} to ${incorrectDestinationKp.publicKey}`)
+            await program.methods
+                .forwardSol()
+                .accounts({
+                    forward: forward,
+                    destination: incorrectDestinationKp.publicKey
+                })
+                .signers([wallet.payer])
+                .rpc();
+        } catch (e) {
+            expect(e).to.be.an.instanceof(AnchorError)
+            const err: AnchorError = e;
+            expect(err.error.errorMessage).to.equal("A seeds constraint was violated");
+            expect(err.error.errorCode.number).to.equal(2006);
+        }
+    });
 
     it("transferSplTokens", async () => {
 
@@ -118,18 +119,7 @@ describe("Test forward", () => {
             destinationKp.publicKey
         );
 
-        console.log("---------------------------------------------------------------------------------------")
-        console.log("forward ", forward)
-        console.log("mint ", mint)
-        console.log("destination ", destinationKp.publicKey)
-        console.log("forwardAta ", forwardAta)
-        console.log("destinationAta ", destinationAta)
-        console.log("user ", wallet.publicKey)
-        console.log("tokenProgram ", TOKEN_PROGRAM_ID)
-        console.log("associatedTokenProgram ", ASSOCIATED_TOKEN_PROGRAM_ID)
-        console.log("systemProgram ", anchor.web3.SystemProgram.programId)
-
-        // Mint tokens to the forward
+        // Mint tokens to the forward ATA
         const mintAmount = 1000;
         await mintTo(
             connection,
@@ -152,8 +142,6 @@ describe("Test forward", () => {
                 destinationAta: destinationAta,
                 user: wallet.publicKey,
                 tokenProgram: TOKEN_PROGRAM_ID,
-                associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-                systemProgram: anchor.web3.SystemProgram.programId,
             })
             .signers([wallet.payer])
             .rpc();

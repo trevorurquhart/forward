@@ -1,8 +1,8 @@
 use anchor_lang::prelude::*;
-use anchor_spl::associated_token::AssociatedToken;
-// use crate::program::Forward;
-use anchor_spl::token::{self, Mint, Token, TokenAccount, TransferChecked};
-// use anchor_spl::token_2022_extensions::spl_token_metadata_interface::solana_program::program_stubs::SyscallStubs;
+
+use anchor_spl::{
+    token_interface::{TokenAccount, Mint, TokenInterface, TransferChecked, transfer_checked},
+};
 
 // This is your program's public key and it will update
 // automatically when you build the project.
@@ -52,7 +52,9 @@ mod forward {
         let binding = ctx.accounts.forward.id.to_le_bytes();
         let id = binding.as_ref();
         let seeds: &[&[u8]] = &[
-            FORWARD_SEED.as_ref(), ctx.accounts.destination.key.as_ref(), id,
+            FORWARD_SEED.as_ref(),
+            ctx.accounts.destination.key.as_ref(),
+            id,
             bump];
         let signer_seeds = &[&seeds[..]];
 
@@ -61,7 +63,7 @@ mod forward {
             accounts,
             signer_seeds);
 
-        token::transfer_checked(cpi_ctx, ctx.accounts.forward_ata.amount, ctx.accounts.mint.decimals)?;
+        transfer_checked(cpi_ctx, ctx.accounts.forward_ata.amount, ctx.accounts.mint.decimals)?;
         Ok(())
     }
 }
@@ -126,9 +128,6 @@ pub enum ForwardError {
 #[derive(Accounts)]
 pub struct ForwardToken<'info> {
 
-    #[account(mut)]
-    pub user: Signer<'info>,
-
     #[account(
         mut,
         seeds = [FORWARD_SEED.as_ref(), destination.key().as_ref(), forward.id.to_le_bytes().as_ref()],
@@ -136,7 +135,7 @@ pub struct ForwardToken<'info> {
     )]
     pub forward: Account<'info, Forward>,
 
-    pub mint: Account<'info, Mint>,
+    pub mint: InterfaceAccount<'info, Mint>,
 
     #[account()]
     pub destination: SystemAccount<'info>,
@@ -146,17 +145,16 @@ pub struct ForwardToken<'info> {
         associated_token::mint = mint,
         associated_token::authority = forward,
     )]
-    pub forward_ata: Account<'info, TokenAccount>,
+    pub forward_ata: InterfaceAccount<'info, TokenAccount>,
 
     #[account(
         mut,
         associated_token::mint = mint,
         associated_token::authority = destination
     )]
-    pub destination_ata: Account<'info, TokenAccount>,
+    pub destination_ata: InterfaceAccount<'info, TokenAccount>,
 
-
-    pub token_program: Program<'info, Token>,
-    pub associated_token_program: Program<'info, AssociatedToken>,
-    pub system_program: Program<'info, System>
+    #[account(mut)]
+    pub user: Signer<'info>,
+    pub token_program: Interface<'info, TokenInterface>,
 }
