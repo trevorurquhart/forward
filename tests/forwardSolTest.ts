@@ -157,16 +157,15 @@ describe("Test forward", () => {
             })
             .signers([wallet.payer])
             .rpc();
-        console.log("forward sent");
-
-
-        console.log(`https://explorer.solana.com/tx/${txHash}?cluster=devnet`);
+        console.log("forward executed, waiting for transaction to finalise");
         await connection.confirmTransaction(txHash, "finalized");
-        const toTokenAccount = await connection.getTokenAccountBalance(forwardAta);
+        const forwardTokenAccount = await connection.getTokenAccountBalance(forwardAta);
+        const destinationTokenAccount = await connection.getTokenAccountBalance(destinationAta);
         assert.strictEqual(
-            toTokenAccount.value.uiAmount,
-            transferAmount.toNumber(),
-            "The 'to' token account should have the transferred tokens"
+            forwardTokenAccount.value.uiAmount, 0, "Should have transferred to 0"
+        );
+        assert.strictEqual(
+            destinationTokenAccount.value.uiAmount, mintAmount, "Should have transferred to full amount"
         );
     });
 

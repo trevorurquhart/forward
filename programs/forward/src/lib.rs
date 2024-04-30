@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
 // use crate::program::Forward;
-use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer as SplTransfer};
+use anchor_spl::token::{self, Mint, Token, TokenAccount, TransferChecked};
 // use anchor_spl::token_2022_extensions::spl_token_metadata_interface::solana_program::program_stubs::SyscallStubs;
 
 // This is your program's public key and it will update
@@ -41,15 +41,27 @@ mod forward {
 
     pub fn forward_token(ctx: Context<ForwardToken>) -> Result<()>
     {
-        token::transfer(
-            CpiContext::new(
-                ctx.accounts.token_program.to_account_info(),
-                SplTransfer {
-                    from: ctx.accounts.forward_ata.to_account_info(),
-                    to: ctx.accounts.destination_ata.to_account_info(),
-                    authority: ctx.accounts.forward.to_account_info(),
-                }),
-            ctx.accounts.forward_ata.amount)?;
+        let accounts = TransferChecked {
+            from: ctx.accounts.forward_ata.to_account_info(),
+            to: ctx.accounts.destination_ata.to_account_info(),
+            authority: ctx.accounts.forward.to_account_info(),
+            mint: ctx.accounts.mint.to_account_info()
+        };
+
+        let bump = &[ctx.accounts.forward.bump];
+        let binding = ctx.accounts.forward.id.to_le_bytes();
+        let id = binding.as_ref();
+        let seeds: &[&[u8]] = &[
+            FORWARD_SEED.as_ref(), ctx.accounts.destination.key.as_ref(), id,
+            bump];
+        let signer_seeds = &[&seeds[..]];
+
+        let cpi_ctx = CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            accounts,
+            signer_seeds);
+
+        token::transfer_checked(cpi_ctx, ctx.accounts.forward_ata.amount, ctx.accounts.mint.decimals)?;
         Ok(())
     }
 }
@@ -114,6 +126,9 @@ pub enum ForwardError {
 #[derive(Accounts)]
 pub struct ForwardToken<'info> {
 
+    #[account(mut)]
+    pub user: Signer<'info>,
+
     #[account(
         mut,
         seeds = [FORWARD_SEED.as_ref(), destination.key().as_ref(), forward.id.to_le_bytes().as_ref()],
@@ -140,8 +155,7 @@ pub struct ForwardToken<'info> {
     )]
     pub destination_ata: Account<'info, TokenAccount>,
 
-    #[account(mut)]
-    pub user: Signer<'info>,
+
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>
